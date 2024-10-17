@@ -11,8 +11,11 @@ namespace VideoFormatScript
         }
 
         private string videoDir;
-        private string audioDir;
+        private string soundDir;
         private string subtitlesDir;
+        private string videoMask;
+        private string soundMask;
+        private string subtitlesMask;
         private string outputDir;
 
         // Кнопка для выбора директории с видео
@@ -29,14 +32,14 @@ namespace VideoFormatScript
         }
 
         // Кнопка для выбора директории с аудио
-        private void btnSelectAudioDir_Click(object sender, EventArgs e)
+        private void btnSelectSoundDir_Click(object sender, EventArgs e)
         {
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
-                    audioDir = dialog.SelectedPath;
-                    txtAudioDir.Text = audioDir;
+                    soundDir = dialog.SelectedPath;
+                    txtSoundDir.Text = soundDir;
                 }
             }
         }
@@ -67,77 +70,144 @@ namespace VideoFormatScript
             }
         }
 
-        // Кнопка для запуска процесса объединения файлов
+        // Основной метод для запуска процесса объединения файлов
         private async void btnMerge_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(videoDir) || string.IsNullOrEmpty(audioDir) || string.IsNullOrEmpty(subtitlesDir) || string.IsNullOrEmpty(outputDir))
+            if (!ValidateInputs())
             {
-                MessageBox.Show("Выберите все директории перед началом процесса.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            if(videoDir == outputDir)
-            {
-                MessageBox.Show("Директория, откуда берутся файлы и куда выгружаются не могут быть одинаковыми.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            string videoFormat = textBoxFormatVideo.Text;
-            string audioFormat = textBoxFormatAudio.Text;
-            string subFormat = textBoxFormatSubs.Text;
-
-            if (string.IsNullOrEmpty(videoFormat) || string.IsNullOrEmpty(audioFormat) || string.IsNullOrEmpty(subFormat))
-            {
-                MessageBox.Show("Укажите все типы файлов перед началом процесса.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             stopOrStartUI();
 
-            // Получаем все файлы в папке с видео
-            string[] videoFiles = Directory.GetFiles(videoDir, $"*{videoFormat}");
-
-            foreach (string video in videoFiles)
+            try
             {
-                // Извлекаем номер серии
-                string fileName = Path.GetFileNameWithoutExtension(video);
-                string seriesNumber = ExtractSeriesNumber(fileName);
-                labelNumSeries.Text = $"Converting {seriesNumber}";
+                // Получаем все файлы с видео
+                string[] videoFiles = Directory.GetFiles(videoDir, $"*{textBoxFormatVideo.Text}");
 
-                if (seriesNumber != null)
+                // Обрабатываем каждый файл видео
+                foreach (string videoFile in videoFiles)
                 {
-                    // Ищем соответствующие аудио и субтитры с таким же номером серии
-                    string audio = FindFileWithSeriesNumber(audioDir, seriesNumber, $"*{audioFormat}");
-                    string subtitles = FindFileWithSeriesNumber(subtitlesDir, seriesNumber, $"*{subFormat}");
+                    string fileName = Path.GetFileNameWithoutExtension(videoFile);
+                    string seriesNumber = ExtractSeriesNumber(fileName, videoMask);
 
-                    if (audio != null && subtitles != null)
+                    if (!string.IsNullOrEmpty(seriesNumber))
                     {
-                        string outputFilePath = Path.Combine(outputDir, fileName + $"{videoFormat}");
-
-                        // Запускаем процесс в отдельном потоке
-                        await Task.Run(() => RunFFmpeg(video, audio, subtitles, outputFilePath));
-
-                        // Если обработка завершилась успешно, удаляем файл
-                        if (File.Exists(outputFilePath) && checkBoxDeleteVideos.Checked)
-                        {
-                            File.Delete(video);
-                        }
+                        labelNumSeries.Text = $"Converting {seriesNumber}";
+                        await ProcessFile(seriesNumber, fileName, videoFile);
                     }
-                    else
+                }
+
+                MessageBox.Show("Процесс завершён.", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show("Процесс завершён с ошибкой: " + ex.Message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                labelNumSeries.Text = "Process ended";
+                stopOrStartUI();
+            }
+        }
+
+        // Функция для проверки входных данных (директорий, масок, форматов)
+        private bool ValidateInputs()
+        {
+            if (string.IsNullOrEmpty(videoDir) || string.IsNullOrEmpty(soundDir) || string.IsNullOrEmpty(subtitlesDir) || string.IsNullOrEmpty(outputDir))
+            {
+                MessageBox.Show("Выберите все директории перед началом процесса.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(textBoxSymbolMaskSubs.Text) || string.IsNullOrEmpty(textBoxSymbolMaskSound.Text) || string.IsNullOrEmpty(textBoxSymbolMaskVideo.Text))
+            {
+                MessageBox.Show("Символ для маски не может быть пустым.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            if (videoDir == outputDir)
+            {
+                MessageBox.Show("Директория, откуда берутся файлы и куда выгружаются, не могут быть одинаковыми.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(textBoxFormatVideo.Text) || string.IsNullOrEmpty(textBoxFormatSound.Text) || string.IsNullOrEmpty(textBoxFormatSubs.Text))
+            {
+                MessageBox.Show("Укажите все типы файлов перед началом процесса.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            return true;
+        }
+
+        // Функция для обработки одного файла
+        private async Task ProcessFile(string seriesNumber, string fileName, string videoFile)
+        {
+            string video = FindFileWithSeriesNumber(videoDir, seriesNumber, $"*{textBoxFormatVideo.Text}", videoMask, textBoxSymbolMaskVideo.Text[0]);
+            string sound = FindFileWithSeriesNumber(soundDir, seriesNumber, $"*{textBoxFormatSound.Text}", soundMask, textBoxSymbolMaskSound.Text[0]);
+            string subtitles = FindFileWithSeriesNumber(subtitlesDir, seriesNumber, $"*{textBoxFormatSubs.Text}", subtitlesMask, textBoxSymbolMaskSubs.Text[0]);
+
+            if (sound != null && subtitles != null)
+            {
+                string outputFilePath = Path.Combine(outputDir, fileName + $"{textBoxFormatVideo.Text}");
+
+                if (File.Exists(outputFilePath)) {
+                    MessageBox.Show($"Файл с директорией {outputFilePath} уже существует. ", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                // Запускаем процесс в отдельном потоке
+                await Task.Run(() => RunFFmpeg(video, sound, subtitles, outputFilePath));
+
+                // Если обработка завершилась успешно, удаляем исходное видео
+                if (File.Exists(outputFilePath) && checkBoxDeleteVideos.Checked)
+                {
+                    File.Delete(videoFile);
+                }
+            }
+            else
+            {
+                MessageBox.Show($"Файлы аудио или субтитров для серии {seriesNumber} не найдены.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        // Извлечение номера серии с учётом маски
+        private string ExtractSeriesNumber(string fileName, string mask = null)
+        {
+            if (!string.IsNullOrEmpty(mask))
+            {
+                // Если указана маска, пытаемся найти место, где начинается номер серии
+                string placeholder = "*";  // Обозначение позиции номера серии
+                int placeholderIndex = mask.IndexOf(placeholder);
+
+                if (placeholderIndex != -1)
+                {
+                    // Определяем часть маски перед звездочкой
+                    string prefix = mask.Substring(0, placeholderIndex);
+                    int startIndex = fileName.IndexOf(prefix);
+
+                    if (startIndex != -1)
                     {
-                        MessageBox.Show($"Файлы аудио или субтитров для серии {seriesNumber} не найдены.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        // Начало номера серии — сразу после найденного префикса
+                        startIndex += prefix.Length;
+
+                        string number = "";
+                        // Считываем цифры до тех пор, пока они есть
+                        while (startIndex < fileName.Length && char.IsDigit(fileName[startIndex]))
+                        {
+                            number += fileName[startIndex];
+                            startIndex++;
+                        }
+
+                        if (!string.IsNullOrEmpty(number))
+                        {
+                            return number; // Возвращаем извлечённый номер серии
+                        }
                     }
                 }
             }
 
-            labelNumSeries.Text = "Process ended";
-            MessageBox.Show("Процесс завершён.", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            stopOrStartUI();
-        }
-
-        // Извлечение двух- или трёхзначного номера серии
-        private string ExtractSeriesNumber(string fileName)
-        {
+            // Если маска не указана, используем стандартное поведение (поиск первых цифр)
             foreach (char c in fileName)
             {
                 if (char.IsDigit(c))
@@ -145,55 +215,56 @@ namespace VideoFormatScript
                     string number = "";
                     int index = fileName.IndexOf(c);
 
-                    while (index < fileName.Length && char.IsDigit(fileName[index]) && number.Length < 3)
+                    while (index < fileName.Length && char.IsDigit(fileName[index]))
                     {
                         number += fileName[index];
                         index++;
                     }
 
-                    if (number.Length == 2 || number.Length == 3)
+                    if (number.Length >= 1)
                         return number;
                 }
             }
             return null;
         }
 
+
+
         // Поиск файла с таким же номером серии
-        private string FindFileWithSeriesNumber(string directory, string seriesNumber, string extension)
+        private string FindFileWithSeriesNumber(string directory, string seriesNumber, string extension, string maskName, char maskSymbol)
         {
-            string[] files = Directory.GetFiles(directory, extension);
-            foreach (string file in files)
+            string[] files;
+
+            // Если маска указана, заменяем maskSymbol на seriesNumber
+            if (!string.IsNullOrEmpty(maskName))
             {
-                if (file.Contains(seriesNumber))
-                {
-                    return file;
-                }
+                string modifiedMask = maskName.Replace(maskSymbol.ToString(), seriesNumber);
+                // Ищем файлы с примененной маской
+                files = Directory.GetFiles(directory, modifiedMask + extension);
             }
+            else
+            {
+                // Если маски нет, ищем файлы по совпадению с seriesNumber
+                files = Directory.GetFiles(directory, "*" + seriesNumber + "*" + extension);
+            }
+
+            // Если найдены файлы, возвращаем первый
+            if (files.Length > 0)
+            {
+                return files[0];
+            }
+
+            // Если ничего не найдено, возвращаем null
             return null;
         }
 
-        private void stopOrStartUI()
-        {
-            btnMerge.Enabled = !btnMerge.Enabled;
-            txtAudioDir.Enabled = !txtAudioDir.Enabled;
-            txtOutputDir.Enabled = !txtOutputDir.Enabled;
-            txtSubtitlesDir.Enabled = !txtSubtitlesDir.Enabled;
-            txtVideoDir.Enabled = !txtVideoDir.Enabled;
-            btnSelectVideoDir.Enabled = !btnSelectVideoDir.Enabled;
-            btnSelectAudioDir.Enabled = !btnSelectAudioDir.Enabled;
-            btnSelectOutputDir.Enabled = !btnSelectOutputDir.Enabled;
-            btnSelectSubtitlesDir.Enabled = !btnSelectSubtitlesDir.Enabled;
-            textBoxFormatAudio.Enabled = !textBoxFormatAudio.Enabled;
-            textBoxFormatSubs.Enabled = !textBoxFormatSubs.Enabled;
-            textBoxFormatVideo.Enabled = !textBoxFormatVideo.Enabled;
 
-        }
 
-        private void RunFFmpeg(string video, string audio, string subtitles, string output)
+        private void RunFFmpeg(string video, string sound, string subtitles, string output)
         {
             Process ffmpeg = new Process();
             ffmpeg.StartInfo.FileName = @"ffmpeg\bin\ffmpeg.exe";
-            ffmpeg.StartInfo.Arguments = $"-i \"{video}\" -i \"{audio}\" -i \"{subtitles}\" -map 0:v -map 1:a -map 2:s -c:v copy -c:a copy -c:s copy \"{output}\"";
+            ffmpeg.StartInfo.Arguments = $"-i \"{video}\" -i \"{sound}\" -i \"{subtitles}\" -map 0:v -map 1:a -map 2:s -c:v copy -c:a copy -c:s copy \"{output}\"";
             ffmpeg.StartInfo.RedirectStandardOutput = true;
             ffmpeg.StartInfo.RedirectStandardError = true;
             ffmpeg.StartInfo.UseShellExecute = false;
@@ -250,14 +321,43 @@ namespace VideoFormatScript
             }
         }
 
+        //UI functions
+
+        private void stopOrStartUI()
+        {
+            btnMerge.Enabled = !btnMerge.Enabled;
+
+            txtSoundDir.Enabled = !txtSoundDir.Enabled;
+            txtOutputDir.Enabled = !txtOutputDir.Enabled;
+            txtSubtitlesDir.Enabled = !txtSubtitlesDir.Enabled;
+            txtVideoDir.Enabled = !txtVideoDir.Enabled;
+
+            btnSelectVideoDir.Enabled = !btnSelectVideoDir.Enabled;
+            btnSelectSoundDir.Enabled = !btnSelectSoundDir.Enabled;
+            btnSelectOutputDir.Enabled = !btnSelectOutputDir.Enabled;
+            btnSelectSubtitlesDir.Enabled = !btnSelectSubtitlesDir.Enabled;
+
+            textBoxFormatSound.Enabled = !textBoxFormatSound.Enabled;
+            textBoxFormatSubs.Enabled = !textBoxFormatSubs.Enabled;
+            textBoxFormatVideo.Enabled = !textBoxFormatVideo.Enabled;
+
+            textBoxMaskSubs.Enabled = !textBoxMaskSubs.Enabled;
+            textBoxMaskSound.Enabled = !textBoxMaskSound.Enabled;
+            textBoxMaskVideo.Enabled = !textBoxMaskVideo.Enabled;
+
+            textBoxSymbolMaskVideo.Enabled = !textBoxSymbolMaskVideo.Enabled;
+            textBoxSymbolMaskSound.Enabled = !textBoxSymbolMaskSound.Enabled;
+            textBoxSymbolMaskSubs.Enabled = !textBoxSymbolMaskSubs.Enabled;
+        }
+
         private void txtVideoDir_TextChanged(object sender, EventArgs e)
         {
             videoDir = txtVideoDir.Text;
         }
 
-        private void txtAudioDir_TextChanged(object sender, EventArgs e)
+        private void txtSoundDir_TextChanged(object sender, EventArgs e)
         {
-            audioDir = txtAudioDir.Text;
+            soundDir = txtSoundDir.Text;
         }
 
         private void txtSubtitlesDir_TextChanged(object sender, EventArgs e)
@@ -268,6 +368,21 @@ namespace VideoFormatScript
         private void txtOutputDir_TextChanged(object sender, EventArgs e)
         {
             outputDir = txtOutputDir.Text;
+        }
+
+        private void textBoxMaskVideo_TextChanged(object sender, EventArgs e)
+        {
+            videoMask = textBoxMaskVideo.Text;
+        }
+
+        private void textBoxMaskSound_TextChanged(object sender, EventArgs e)
+        {
+            soundMask = textBoxMaskSound.Text;
+        }
+
+        private void textBoxMaskSubs_TextChanged(object sender, EventArgs e)
+        {
+            subtitlesMask = textBoxMaskSubs.Text;
         }
     }
 }
