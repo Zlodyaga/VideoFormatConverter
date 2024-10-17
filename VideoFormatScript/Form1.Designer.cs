@@ -53,6 +53,7 @@
             txtVideoDir.Size = new Size(694, 35);
             txtVideoDir.TabIndex = 0;
             txtVideoDir.Text = "VideoDir";
+            txtVideoDir.TextChanged += txtVideoDir_TextChanged;
             // 
             // txtAudioDir
             // 
@@ -62,6 +63,7 @@
             txtAudioDir.Size = new Size(694, 35);
             txtAudioDir.TabIndex = 1;
             txtAudioDir.Text = "SoundDir";
+            txtAudioDir.TextChanged += txtAudioDir_TextChanged;
             // 
             // txtSubtitlesDir
             // 
@@ -71,6 +73,7 @@
             txtSubtitlesDir.Size = new Size(694, 35);
             txtSubtitlesDir.TabIndex = 2;
             txtSubtitlesDir.Text = "SubsDir";
+            txtSubtitlesDir.TextChanged += txtSubtitlesDir_TextChanged;
             // 
             // txtOutputDir
             // 
@@ -80,6 +83,7 @@
             txtOutputDir.Size = new Size(694, 35);
             txtOutputDir.TabIndex = 3;
             txtOutputDir.Text = "OutputDir";
+            txtOutputDir.TextChanged += txtOutputDir_TextChanged;
             // 
             // btnSelectVideoDir
             // 

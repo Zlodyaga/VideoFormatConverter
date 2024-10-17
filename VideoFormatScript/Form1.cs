@@ -76,6 +76,12 @@ namespace VideoFormatScript
                 return;
             }
 
+            if(videoDir == outputDir)
+            {
+                MessageBox.Show("Директория, откуда берутся файлы и куда выгружаются не могут быть одинаковыми.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
             string videoFormat = textBoxFormatVideo.Text;
             string audioFormat = textBoxFormatAudio.Text;
             string subFormat = textBoxFormatSubs.Text;
@@ -242,6 +248,26 @@ namespace VideoFormatScript
                 ffmpeg.Close();
                 ffmpeg.Dispose();
             }
+        }
+
+        private void txtVideoDir_TextChanged(object sender, EventArgs e)
+        {
+            videoDir = txtVideoDir.Text;
+        }
+
+        private void txtAudioDir_TextChanged(object sender, EventArgs e)
+        {
+            audioDir = txtAudioDir.Text;
+        }
+
+        private void txtSubtitlesDir_TextChanged(object sender, EventArgs e)
+        {
+            subtitlesDir = txtSubtitlesDir.Text;
+        }
+
+        private void txtOutputDir_TextChanged(object sender, EventArgs e)
+        {
+            outputDir = txtOutputDir.Text;
         }
     }
 }
