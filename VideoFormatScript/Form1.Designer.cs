@@ -55,6 +55,8 @@
             panel3 = new Panel();
             textBoxSymbolMaskSubs = new TextBox();
             label3 = new Label();
+            checkBoxNotUseSubs = new CheckBox();
+            checkBoxNotUseSound = new CheckBox();
             panel1.SuspendLayout();
             panel2.SuspendLayout();
             panel3.SuspendLayout();
@@ -259,6 +261,7 @@
             // 
             textBoxSymbolMaskVideo.Font = new Font("Segoe UI", 15.75F);
             textBoxSymbolMaskVideo.Location = new Point(968, 61);
+            textBoxSymbolMaskVideo.MaxLength = 1;
             textBoxSymbolMaskVideo.Name = "textBoxSymbolMaskVideo";
             textBoxSymbolMaskVideo.Size = new Size(129, 35);
             textBoxSymbolMaskVideo.TabIndex = 12;
@@ -289,6 +292,7 @@
             // 
             textBoxSymbolMaskSound.Font = new Font("Segoe UI", 15.75F);
             textBoxSymbolMaskSound.Location = new Point(968, 66);
+            textBoxSymbolMaskSound.MaxLength = 1;
             textBoxSymbolMaskSound.Name = "textBoxSymbolMaskSound";
             textBoxSymbolMaskSound.Size = new Size(129, 35);
             textBoxSymbolMaskSound.TabIndex = 12;
@@ -319,6 +323,7 @@
             // 
             textBoxSymbolMaskSubs.Font = new Font("Segoe UI", 15.75F);
             textBoxSymbolMaskSubs.Location = new Point(968, 64);
+            textBoxSymbolMaskSubs.MaxLength = 1;
             textBoxSymbolMaskSubs.Name = "textBoxSymbolMaskSubs";
             textBoxSymbolMaskSubs.Size = new Size(129, 35);
             textBoxSymbolMaskSubs.TabIndex = 13;
@@ -334,12 +339,38 @@
             label3.TabIndex = 2;
             label3.Text = "example: text.smth231.Ep*.smth15";
             // 
+            // checkBoxNotUseSubs
+            // 
+            checkBoxNotUseSubs.AutoSize = true;
+            checkBoxNotUseSubs.Font = new Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 204);
+            checkBoxNotUseSubs.Location = new Point(22, 477);
+            checkBoxNotUseSubs.Name = "checkBoxNotUseSubs";
+            checkBoxNotUseSubs.Size = new Size(154, 25);
+            checkBoxNotUseSubs.TabIndex = 20;
+            checkBoxNotUseSubs.Text = "Don't use subs dir";
+            checkBoxNotUseSubs.UseVisualStyleBackColor = true;
+            checkBoxNotUseSubs.CheckedChanged += checkBoxNotUseSubs_CheckedChanged;
+            // 
+            // checkBoxNotUseSound
+            // 
+            checkBoxNotUseSound.AutoSize = true;
+            checkBoxNotUseSound.Font = new Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 204);
+            checkBoxNotUseSound.Location = new Point(22, 446);
+            checkBoxNotUseSound.Name = "checkBoxNotUseSound";
+            checkBoxNotUseSound.Size = new Size(165, 25);
+            checkBoxNotUseSound.TabIndex = 21;
+            checkBoxNotUseSound.Text = "Don't use sound dir";
+            checkBoxNotUseSound.UseVisualStyleBackColor = true;
+            checkBoxNotUseSound.CheckedChanged += checkBoxNotUseSound_CheckedChanged;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.Gainsboro;
             ClientSize = new Size(1123, 664);
+            Controls.Add(checkBoxNotUseSound);
+            Controls.Add(checkBoxNotUseSubs);
             Controls.Add(textBoxMaskSubs);
             Controls.Add(textBoxMaskSound);
             Controls.Add(textBoxMaskVideo);
@@ -403,5 +434,7 @@
         private TextBox textBoxSymbolMaskVideo;
         private TextBox textBoxSymbolMaskSound;
         private TextBox textBoxSymbolMaskSubs;
+        private CheckBox checkBoxNotUseSubs;
+        private CheckBox checkBoxNotUseSound;
     }
 }

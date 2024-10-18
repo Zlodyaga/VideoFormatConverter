@@ -100,7 +100,7 @@ namespace VideoFormatScript
 
                 MessageBox.Show("Процесс завершён.", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 MessageBox.Show("Процесс завершён с ошибкой: " + ex.Message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -114,11 +114,15 @@ namespace VideoFormatScript
         // Функция для проверки входных данных (директорий, масок, форматов)
         private bool ValidateInputs()
         {
-            if (string.IsNullOrEmpty(videoDir) || string.IsNullOrEmpty(soundDir) || string.IsNullOrEmpty(subtitlesDir) || string.IsNullOrEmpty(outputDir))
+            bool validSound = checkBoxNotUseSound.Checked || !string.IsNullOrEmpty(soundDir);
+            bool validSubs = checkBoxNotUseSubs.Checked || !string.IsNullOrEmpty(subtitlesDir);
+
+            if (string.IsNullOrEmpty(videoDir) || !validSound || !validSubs || string.IsNullOrEmpty(outputDir))
             {
-                MessageBox.Show("Выберите все директории перед началом процесса.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Выберите все необходимые директории перед началом процесса.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
+
 
             if (string.IsNullOrEmpty(textBoxSymbolMaskSubs.Text) || string.IsNullOrEmpty(textBoxSymbolMaskSound.Text) || string.IsNullOrEmpty(textBoxSymbolMaskVideo.Text))
             {
@@ -145,29 +149,36 @@ namespace VideoFormatScript
         private async Task ProcessFile(string seriesNumber, string fileName, string videoFile)
         {
             string video = FindFileWithSeriesNumber(videoDir, seriesNumber, $"*{textBoxFormatVideo.Text}", videoMask, textBoxSymbolMaskVideo.Text[0]);
-            string sound = FindFileWithSeriesNumber(soundDir, seriesNumber, $"*{textBoxFormatSound.Text}", soundMask, textBoxSymbolMaskSound.Text[0]);
-            string subtitles = FindFileWithSeriesNumber(subtitlesDir, seriesNumber, $"*{textBoxFormatSubs.Text}", subtitlesMask, textBoxSymbolMaskSubs.Text[0]);
+            string sound = null;
+            string subtitles = null;
 
-            if (sound != null && subtitles != null)
+            // Если не выбран флаг "Не использовать аудио"
+            if (!checkBoxNotUseSound.Checked)
             {
-                string outputFilePath = Path.Combine(outputDir, fileName + $"{textBoxFormatVideo.Text}");
-
-                if (File.Exists(outputFilePath)) {
-                    MessageBox.Show($"Файл с директорией {outputFilePath} уже существует. ", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                // Запускаем процесс в отдельном потоке
-                await Task.Run(() => RunFFmpeg(video, sound, subtitles, outputFilePath));
-
-                // Если обработка завершилась успешно, удаляем исходное видео
-                if (File.Exists(outputFilePath) && checkBoxDeleteVideos.Checked)
-                {
-                    File.Delete(videoFile);
-                }
+                sound = FindFileWithSeriesNumber(soundDir, seriesNumber, $"*{textBoxFormatSound.Text}", soundMask, textBoxSymbolMaskSound.Text[0]);
             }
-            else
+
+            // Если не выбран флаг "Не использовать субтитры"
+            if (!checkBoxNotUseSubs.Checked)
             {
-                MessageBox.Show($"Файлы аудио или субтитров для серии {seriesNumber} не найдены.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                subtitles = FindFileWithSeriesNumber(subtitlesDir, seriesNumber, $"*{textBoxFormatSubs.Text}", subtitlesMask, textBoxSymbolMaskSubs.Text[0]);
+            }
+
+            string outputFilePath = Path.Combine(outputDir, fileName + $"{textBoxFormatVideo.Text}");
+
+            if (File.Exists(outputFilePath))
+            {
+                MessageBox.Show($"Файл с директорией {outputFilePath} уже существует. ", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Запускаем процесс в отдельном потоке, передаем только доступные параметры
+            await Task.Run(() => RunFFmpeg(video, sound, subtitles, outputFilePath));
+
+            // Если обработка завершилась успешно, удаляем исходное видео
+            if (File.Exists(outputFilePath) && checkBoxDeleteVideos.Checked)
+            {
+                File.Delete(videoFile);
             }
         }
 
@@ -228,8 +239,6 @@ namespace VideoFormatScript
             return null;
         }
 
-
-
         // Поиск файла с таким же номером серии
         private string FindFileWithSeriesNumber(string directory, string seriesNumber, string extension, string maskName, char maskSymbol)
         {
@@ -258,13 +267,41 @@ namespace VideoFormatScript
             return null;
         }
 
-
-
+        // Обновленная функция для запуска FFmpeg, принимающая параметры условно
         private void RunFFmpeg(string video, string sound, string subtitles, string output)
         {
             Process ffmpeg = new Process();
             ffmpeg.StartInfo.FileName = @"ffmpeg\bin\ffmpeg.exe";
-            ffmpeg.StartInfo.Arguments = $"-i \"{video}\" -i \"{sound}\" -i \"{subtitles}\" -map 0:v -map 1:a -map 2:s -c:v copy -c:a copy -c:s copy \"{output}\"";
+
+            // Формируем аргументы для FFmpeg
+            string arguments = $"-i \"{video}\"";
+
+            if (!string.IsNullOrEmpty(sound))
+            {
+                arguments += $" -i \"{sound}\"";
+            }
+
+            if (!string.IsNullOrEmpty(subtitles))
+            {
+                arguments += $" -i \"{subtitles}\"";
+            }
+
+            arguments += " -map 0:v";
+
+            if (!string.IsNullOrEmpty(sound))
+            {
+                arguments += " -map 1:a";
+            }
+
+            if (!string.IsNullOrEmpty(subtitles))
+            {
+                arguments += " -map 2:s";
+            }
+
+            arguments += " -c:v copy -c:a copy -c:s copy";
+            arguments += $" \"{output}\"";
+
+            ffmpeg.StartInfo.Arguments = arguments;
             ffmpeg.StartInfo.RedirectStandardOutput = true;
             ffmpeg.StartInfo.RedirectStandardError = true;
             ffmpeg.StartInfo.UseShellExecute = false;
@@ -322,32 +359,40 @@ namespace VideoFormatScript
         }
 
         //UI functions
-
-        private void stopOrStartUI()
+        private void stopOrStartUI() //TODO
         {
             btnMerge.Enabled = !btnMerge.Enabled;
 
-            txtSoundDir.Enabled = !txtSoundDir.Enabled;
+            if (!checkBoxNotUseSound.Checked)
+            {
+                txtSoundDir.Enabled = !txtSoundDir.Enabled;
+                btnSelectSoundDir.Enabled = !btnSelectSoundDir.Enabled;
+                textBoxFormatSound.Enabled = !textBoxFormatSound.Enabled;
+                textBoxMaskSound.Enabled = !textBoxMaskSound.Enabled;
+                textBoxSymbolMaskSound.Enabled = !textBoxSymbolMaskSound.Enabled;
+            }
+
+            if (!checkBoxNotUseSubs.Checked)
+            {
+                txtSubtitlesDir.Enabled = !txtSubtitlesDir.Enabled;
+                btnSelectSubtitlesDir.Enabled = !btnSelectSubtitlesDir.Enabled;
+                textBoxFormatSubs.Enabled = !textBoxFormatSubs.Enabled;
+                textBoxMaskSubs.Enabled = !textBoxMaskSubs.Enabled;
+                textBoxSymbolMaskSubs.Enabled = !textBoxSymbolMaskSubs.Enabled;
+            }
+
             txtOutputDir.Enabled = !txtOutputDir.Enabled;
-            txtSubtitlesDir.Enabled = !txtSubtitlesDir.Enabled;
             txtVideoDir.Enabled = !txtVideoDir.Enabled;
 
             btnSelectVideoDir.Enabled = !btnSelectVideoDir.Enabled;
-            btnSelectSoundDir.Enabled = !btnSelectSoundDir.Enabled;
             btnSelectOutputDir.Enabled = !btnSelectOutputDir.Enabled;
-            btnSelectSubtitlesDir.Enabled = !btnSelectSubtitlesDir.Enabled;
 
-            textBoxFormatSound.Enabled = !textBoxFormatSound.Enabled;
-            textBoxFormatSubs.Enabled = !textBoxFormatSubs.Enabled;
             textBoxFormatVideo.Enabled = !textBoxFormatVideo.Enabled;
-
-            textBoxMaskSubs.Enabled = !textBoxMaskSubs.Enabled;
-            textBoxMaskSound.Enabled = !textBoxMaskSound.Enabled;
             textBoxMaskVideo.Enabled = !textBoxMaskVideo.Enabled;
-
             textBoxSymbolMaskVideo.Enabled = !textBoxSymbolMaskVideo.Enabled;
-            textBoxSymbolMaskSound.Enabled = !textBoxSymbolMaskSound.Enabled;
-            textBoxSymbolMaskSubs.Enabled = !textBoxSymbolMaskSubs.Enabled;
+
+            checkBoxNotUseSubs.Enabled = !checkBoxNotUseSubs.Enabled;
+            checkBoxNotUseSound.Enabled = !checkBoxNotUseSound.Enabled;
         }
 
         private void txtVideoDir_TextChanged(object sender, EventArgs e)
@@ -383,6 +428,24 @@ namespace VideoFormatScript
         private void textBoxMaskSubs_TextChanged(object sender, EventArgs e)
         {
             subtitlesMask = textBoxMaskSubs.Text;
+        }
+
+        private void checkBoxNotUseSubs_CheckedChanged(object sender, EventArgs e)
+        {
+            txtSubtitlesDir.Enabled = !txtSubtitlesDir.Enabled;
+            btnSelectSubtitlesDir.Enabled = !btnSelectSubtitlesDir.Enabled;
+            textBoxFormatSubs.Enabled = !textBoxFormatSubs.Enabled;
+            textBoxMaskSubs.Enabled = !textBoxMaskSubs.Enabled;
+            textBoxSymbolMaskSubs.Enabled = !textBoxSymbolMaskSubs.Enabled;
+        }
+
+        private void checkBoxNotUseSound_CheckedChanged(object sender, EventArgs e)
+        {
+            txtSoundDir.Enabled = !txtSoundDir.Enabled;
+            btnSelectSoundDir.Enabled = !btnSelectSoundDir.Enabled;
+            textBoxFormatSound.Enabled = !textBoxFormatSound.Enabled;
+            textBoxMaskSound.Enabled = !textBoxMaskSound.Enabled;
+            textBoxSymbolMaskSound.Enabled = !textBoxSymbolMaskSound.Enabled;
         }
     }
 }
